@@ -83,7 +83,7 @@ impl ListPortInfo {
             fs::canonicalize(subsystem_path).ok()});
         let subsystem:Option<String> = subsystem_path.and_then(|pb| pb.file_name().map(OsStr::to_string_lossy).map(Cow::into_owned));
 
-        if subsystem.as_ref().clone().map(String::as_str) == Some("platform") {
+        if subsystem.as_ref().map(String::as_str) == Some("platform") {
             return None;
         }
 
@@ -166,13 +166,14 @@ fn read_option_string(usb_device_path: Option<PathBuf>, filename: &str) -> Optio
 }
 
 fn option_string(opt_str: &Option<String>) -> &str {
-    opt_str.as_ref().map(String::as_str).unwrap_or("None")
+    opt_str.as_ref().map_or("None", String::as_str)
 }
 
 fn option_pathbuf(opt_pb: &Option<PathBuf>) -> &str {
     opt_pb.as_ref().map(PathBuf::as_path).and_then(Path::to_str).unwrap_or("None")
 }
 
+#[derive(Default)]
 pub struct ListPorts {
     ports: Vec<ListPortInfo>
 }
@@ -215,7 +216,7 @@ impl IntoIterator for ListPorts {
 }
 
 // TODO: Write tests. For the tests, I think I'll create a /dev tree
-// and a /sys tree and have some hooks to allow /dev and /sys to poinr
+// and a /sys tree and have some hooks to allow /dev and /sys to point
 // to the test tree instead of the real one.
 
 #[cfg(test)]
