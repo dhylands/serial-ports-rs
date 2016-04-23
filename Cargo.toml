@@ -5,3 +5,4 @@ authors = ["Dave Hylands <dhylands@gmail.com>"]
 
 [dependencies]
 glob = "*"
+clippy = "*"
