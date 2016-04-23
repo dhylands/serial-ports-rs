@@ -1,3 +1,9 @@
+#![feature(plugin)]
+
+// Make linter fail for every warning
+#![plugin(clippy)]
+#![deny(clippy)]
+
 extern crate glob;
 
 use glob::glob;
