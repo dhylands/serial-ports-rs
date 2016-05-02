@@ -1,18 +1,41 @@
-#![feature(plugin)]
+// Clippy is disabled by default since it doesn't work in stable rust.
+//
+// You can either use cargo's --features clippy, i.e.:
+//
+//     cargo run --features clippy --example list_ports
+// 
+// or edit the features in the Cargo.tomlk file if you'd like to have clippy
+// run by default.
+
+#![cfg_attr(feature="clippy", feature(plugin))]
 
 // Make linter fail for every warning
-#![plugin(clippy)]
-#![deny(clippy)]
+#![cfg_attr(feature="clippy", plugin(clippy))]
+#![cfg_attr(feature="clippy", deny(clippy))]
 
-extern crate glob;
+#[macro_use]
+extern crate cfg_if;
 
-use glob::glob;
-use std::borrow::Cow;
-use std::io::{ BufRead, BufReader };
-use std::ffi::OsStr;
-use std::fs;
-use std::path::{ Path, PathBuf };
+extern crate libc;
+
+use std::path::PathBuf;
 use std::slice::Iter;
+
+cfg_if! {
+    if #[cfg(target_os = "linux")] {
+        pub mod linux;
+        pub use linux::*;
+        extern crate glob;
+    } else if #[cfg(target_os = "macos")] {
+        pub mod macos;
+        pub use macos::*;
+        extern crate IOKit_sys;
+        extern crate mach;
+        extern crate CoreFoundation_sys as cf;
+    } else {
+        // ...
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct UsbPortInfo {
@@ -26,18 +49,6 @@ pub struct UsbPortInfo {
 }
 
 impl UsbPortInfo {
-    pub fn new(usb_device_path: Option<PathBuf>) -> Self {
-        UsbPortInfo {
-            vid: read_hex_int(usb_device_path.clone(), "idVendor"),
-            pid: read_hex_int(usb_device_path.clone(), "idProduct"),
-            serial_number: read_option_string(usb_device_path.clone(), "serial"),
-            location: usb_device_path.as_ref().and_then(|dp| dp.file_name()).map(OsStr::to_string_lossy).map(Cow::into_owned),
-            manufacturer: read_option_string(usb_device_path.clone(), "manufacturer"),
-            product: read_option_string(usb_device_path.clone(), "product"),
-            interface: read_option_string(usb_device_path.clone(), "interface"),
-        }
-    }
-
     pub fn hwid(&self) -> String {
         format!("USB VID:PID={:04X}:{:04X}{}{}",
                 self.vid, self.pid,
@@ -57,6 +68,7 @@ pub enum ListPortType {
     UsbPort(UsbPortInfo),
     PnpPort,
     AmbaPort,
+    NativePort, // Currently used for MacOS for non-USB ports.
     Unknown,
 }
 
@@ -64,77 +76,15 @@ pub enum ListPortType {
 pub struct ListPortInfo {
     pub device: PathBuf,
     pub name: String,
-    pub device_path: Option<PathBuf>,
-    pub subsystem: Option<String>,
-    pub usb_device_path: Option<PathBuf>,
     pub description: String,
     pub hwid: String,
     pub port_type: ListPortType,
 }
 
 impl ListPortInfo {
-    fn new(dev_name: PathBuf) -> Option<Self> {
-
-        let basename = dev_name.file_name().map(OsStr::to_string_lossy).map(Cow::into_owned);
-        if basename.is_none() {
-            return None;
-        }
-        let basename = basename.unwrap();
-
-        let device_path = fs::canonicalize(format!("/sys/class/tty/{}/device", basename)).ok();
-
-        let subsystem_path = device_path.as_ref().and_then(|dp| {
-            let mut subsystem_path = PathBuf::from(dp);
-            subsystem_path.push("subsystem");
-            fs::canonicalize(subsystem_path).ok()});
-        let subsystem:Option<String> = subsystem_path.and_then(|pb| pb.file_name().map(OsStr::to_string_lossy).map(Cow::into_owned));
-
-        if subsystem.as_ref().map(String::as_str) == Some("platform") {
-            return None;
-        }
-
-        let usb_device_path = device_path.as_ref().and_then(|dp|
-            match subsystem.as_ref().map(String::as_str) {
-                Some("usb-serial")  => PathBuf::from(dp).parent().and_then(|p| p.parent()).map(|p| p.to_path_buf()),
-                Some("usb")         => PathBuf::from(dp).parent().map(|p| p.to_path_buf()),
-                _ => None,
-            }
-        );
-
-        let (port_type, description, hwid) = match subsystem.as_ref().map(String::as_str) {
-            Some("usb") | Some("usb-serial") => {
-                let info = UsbPortInfo::new(usb_device_path.clone());
-                (ListPortType::UsbPort(info.clone()), info.description(&basename), info.hwid())
-            },
-            Some("pnp") => (ListPortType::PnpPort,
-                            basename.clone(),
-                            read_option_string(device_path.clone(), "id").unwrap_or("".to_owned())),
-            Some("amba") => (ListPortType::AmbaPort,
-                             basename.clone(),
-                             device_path.as_ref().and_then(|dp| dp.file_name()).map(OsStr::to_string_lossy).map(Cow::into_owned).unwrap()),
-            _ => (ListPortType::Unknown, "".to_owned(), "".to_owned()),
-        };
-
-        let info = ListPortInfo {
-            device: dev_name,
-            name: basename,
-            device_path: device_path,
-            subsystem: subsystem,
-            usb_device_path: usb_device_path,
-            description: description,
-            hwid: hwid,
-            port_type: port_type,
-        };
-
-        Some(info)
-    }
-
     pub fn dump(&self) {
         println!("Device: {}", self.device.display());
         println!("             name: {}", self.name);
-        println!("      device_path: {}", option_pathbuf(&self.device_path));
-        println!("        subsystem: {}", option_string(&self.subsystem));
-        println!("  usb_device_path: {}", option_pathbuf(&self.usb_device_path));
         println!("      description: {}", self.description);
         println!("             hwid: {}", self.hwid);
         match self.port_type {
@@ -148,6 +98,7 @@ impl ListPortInfo {
                 println!("          product: {}", option_string(&info.product));
                 println!("        interface: {}", option_string(&info.interface));
             },
+            ListPortType::NativePort    => println!("        port_type: NativePort"),
             ListPortType::PnpPort       => println!("        port_type: PnpPort"),
             ListPortType::AmbaPort      => println!("        port_type: AmbaPort"),
             _                           => println!("        port_type: Unknown"),
@@ -155,28 +106,8 @@ impl ListPortInfo {
     }
 }
 
-fn read_hex_int(usb_device_path: Option<PathBuf>, filename: &str) -> u16 {
-    read_option_string(usb_device_path, filename).map_or(0, |s| u16::from_str_radix(&s, 16).unwrap_or(0))
-}
-
-fn read_option_string(usb_device_path: Option<PathBuf>, filename: &str) -> Option<String> {
-    if usb_device_path.is_none() {
-        return None;
-    }
-    let mut pathname = usb_device_path.unwrap();
-    pathname.push(filename);
-
-    let mut line = String::new();
-    fs::File::open(pathname).map(|f| BufReader::new(f).read_line(&mut line))
-                            .map(|_| line.trim().to_owned()).ok()
-}
-
 fn option_string(opt_str: &Option<String>) -> &str {
     opt_str.as_ref().map_or("None", String::as_str)
-}
-
-fn option_pathbuf(opt_pb: &Option<PathBuf>) -> &str {
-    opt_pb.as_ref().map(PathBuf::as_path).and_then(Path::to_str).unwrap_or("None")
 }
 
 #[derive(Default)]
@@ -185,28 +116,6 @@ pub struct ListPorts {
 }
 
 impl ListPorts {
-    pub fn new() -> Self {
-        let mut ports = ListPorts {
-            ports: Vec::new()
-        };
-        ports.add_ports_matching("/dev/ttyS*");
-        ports.add_ports_matching("/dev/ttyUSB*");
-        ports.add_ports_matching("/dev/ttyACM*");
-        ports.add_ports_matching("/dev/ttyAMA*");
-        ports.add_ports_matching("/dev/rfcomm*");
-        ports
-    }
-
-    fn add_ports_matching(&mut self, pattern: &str) {
-        for entry in glob(pattern).unwrap() {
-            if let Ok(path_buf) = entry {
-                if let Some(info) = ListPortInfo::new(path_buf) {
-                    self.ports.push(info);
-                }
-            }
-        }
-    }
-
     pub fn iter(&self) -> Iter<ListPortInfo> {
         self.ports.iter()
     }

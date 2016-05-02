@@ -1,8 +1,21 @@
 [package]
 name = "serial_ports"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Dave Hylands <dhylands@gmail.com>"]
 
 [dependencies]
+clippy = { version = "*", optional = true }
+libc = "*"
+cfg-if = "*"
+
+[target.'cfg(target_os = "linux")'.dependencies]
 glob = "*"
-clippy = "*"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+IOKit-sys = { git = "https://github.com/dhylands/iokit-sys", rev = "cabaa7ceb41bbdaa029b0cc9171029c7888870f7" }	# Until PR is merged
+mach = { git = "https://github.com/dhylands/mach", rev = "434f1e5149247350f1f99b066326658d63070a9e" } 	# Until PR is merged
+CoreFoundation-sys = "*"
+
+[features]
+#default=["clippy"]	# Requires nightly (you can also use cargo run --features clippy)
+default=[]		# Use this one for stable
