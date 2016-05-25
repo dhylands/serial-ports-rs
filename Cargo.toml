@@ -12,8 +12,8 @@ cfg-if = "*"
 glob = "*"
 
 [target.'cfg(target_os = "macos")'.dependencies]
-IOKit-sys = { git = "https://github.com/dhylands/iokit-sys", rev = "cabaa7ceb41bbdaa029b0cc9171029c7888870f7" }	# Until PR is merged
-mach = { git = "https://github.com/dhylands/mach", rev = "434f1e5149247350f1f99b066326658d63070a9e" } 	# Until PR is merged
+IOKit-sys = { git = "https://github.com/dhylands/iokit-sys", rev = "256dadec3b63ecd85467ada1d4ada8e90ac9ce53" }	# Until PR is merged
+mach = "*"
 CoreFoundation-sys = "*"
 
 [features]

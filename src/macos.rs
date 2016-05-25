@@ -46,7 +46,7 @@ fn get_parent_device_by_type(device: io_object_t, parent_type: *const c_char) ->
             return Some(device);
         }
         let mut parent: io_registry_entry_t = unsafe { mem::uninitialized() };
-        if unsafe { IORegistryEntryGetParentEntry(device, kIOServiceKey(), &mut parent) != KERN_SUCCESS } {
+        if unsafe { IORegistryEntryGetParentEntry(device, kIOServiceClass(), &mut parent) != KERN_SUCCESS } {
             return None;
         }
         device = parent;
@@ -114,7 +114,7 @@ fn get_interface(location_id: u32) -> Option<String> {
     let services = get_ioservices_by_type(kIOSerialBSDServiceValue());
     for service in services {
         if let Some(_) = get_string_property(service, "IOCalloutDevice") {
-            if let Some(usb_device) = get_parent_device_by_type(service, kIOUSBInterfaceType()) {
+            if let Some(usb_device) = get_parent_device_by_type(service, kIOUSBInterfaceClassName()) {
                 let intf_name = get_string_property(usb_device, "USB Interface Name");
                 let intf_location = get_int_property(usb_device, "locationID", kCFNumberSInt32Type);
                 if intf_location == location_id {
@@ -128,7 +128,7 @@ fn get_interface(location_id: u32) -> Option<String> {
 
 impl ::ListPortInfo {
     fn new(dev_name: &str, service: io_object_t) -> Self {
-        if let Some(usb_device) = get_parent_device_by_type(service, kIOUSBDeviceType()) {
+        if let Some(usb_device) = get_parent_device_by_type(service, kIOUSBDeviceClassName()) {
 
             let location_id = get_int_property(usb_device, "locationID", kCFNumberSInt32Type);
 
