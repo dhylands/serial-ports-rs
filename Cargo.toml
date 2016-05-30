@@ -5,7 +5,7 @@ authors = ["Dave Hylands <dhylands@gmail.com>"]
 
 [dependencies]
 clippy = { version = "*", optional = true }
-libc = "*"
+libc = "0.2"
 cfg-if = "*"
 
 [target.'cfg(target_os = "linux")'.dependencies]
