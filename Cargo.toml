@@ -6,15 +6,15 @@ authors = ["Dave Hylands <dhylands@gmail.com>"]
 [dependencies]
 clippy = { version = "*", optional = true }
 libc = "0.2"
-cfg-if = "*"
+cfg-if = "0.1.0"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-glob = "*"
+glob = "0.2"
 
 [target.'cfg(target_os = "macos")'.dependencies]
-IOKit-sys = { git = "https://github.com/dhylands/iokit-sys", rev = "256dadec3b63ecd85467ada1d4ada8e90ac9ce53" }	# Until PR is merged
-mach = "*"
-CoreFoundation-sys = "*"
+IOKit-sys = "^0.1.4"
+mach = "^0.0.5"
+CoreFoundation-sys = "^0.1.3"
 
 [features]
 #default=["clippy"]	# Requires nightly (you can also use cargo run --features clippy)
